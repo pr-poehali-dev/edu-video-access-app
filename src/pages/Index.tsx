@@ -1,68 +1,32 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, createContext, useContext } from "react";
 import Icon from "@/components/ui/icon";
+import { login, register, logout, getProfile, getToken, saveToken, clearToken, User } from "@/lib/auth";
+
+// ===== AUTH CONTEXT =====
+interface AuthCtx {
+  user: User | null;
+  loading: boolean;
+  signIn: (email: string, password: string) => Promise<string | null>;
+  signUp: (name: string, email: string, password: string) => Promise<string | null>;
+  signOut: () => void;
+}
+
+const AuthContext = createContext<AuthCtx>({
+  user: null,
+  loading: true,
+  signIn: async () => null,
+  signUp: async () => null,
+  signOut: () => {},
+});
+
+const useAuth = () => useContext(AuthContext);
 
 // ===== DATA =====
 const COURSES = [
-  {
-    id: 1,
-    title: "Python для начинающих",
-    author: "Алексей Смирнов",
-    category: "Программирование",
-    duration: "24 ч",
-    lessons: 48,
-    rating: 4.9,
-    students: 12400,
-    progress: 65,
-    color: "from-purple-600 to-blue-600",
-    emoji: "🐍",
-    image: "https://cdn.poehali.dev/projects/30d348bc-9504-4030-a569-e04434a0fc03/files/215138b0-a1f6-4cfd-b3b4-bad1943c7de5.jpg",
-    saved: true,
-  },
-  {
-    id: 2,
-    title: "Дизайн интерфейсов",
-    author: "Мария Козлова",
-    category: "Дизайн",
-    duration: "18 ч",
-    lessons: 32,
-    rating: 4.8,
-    students: 8200,
-    progress: 30,
-    color: "from-pink-600 to-orange-500",
-    emoji: "🎨",
-    image: "https://cdn.poehali.dev/projects/30d348bc-9504-4030-a569-e04434a0fc03/files/130087a4-e65c-4d98-bd95-56f514fcd970.jpg",
-    saved: false,
-  },
-  {
-    id: 3,
-    title: "Английский язык B2",
-    author: "Джон Уотсон",
-    category: "Языки",
-    duration: "40 ч",
-    lessons: 80,
-    rating: 4.7,
-    students: 21000,
-    progress: 12,
-    color: "from-cyan-500 to-teal-600",
-    emoji: "🌍",
-    image: "https://cdn.poehali.dev/projects/30d348bc-9504-4030-a569-e04434a0fc03/files/33c14bac-9540-4121-8091-9a05be97ed91.jpg",
-    saved: true,
-  },
-  {
-    id: 4,
-    title: "Маркетинг в соцсетях",
-    author: "Ольга Петрова",
-    category: "Маркетинг",
-    duration: "12 ч",
-    lessons: 24,
-    rating: 4.6,
-    students: 5800,
-    progress: 0,
-    color: "from-yellow-500 to-orange-600",
-    emoji: "📱",
-    image: "https://cdn.poehali.dev/projects/30d348bc-9504-4030-a569-e04434a0fc03/files/130087a4-e65c-4d98-bd95-56f514fcd970.jpg",
-    saved: false,
-  },
+  { id: 1, title: "Python для начинающих", author: "Алексей Смирнов", category: "Программирование", duration: "24 ч", lessons: 48, rating: 4.9, students: 12400, progress: 65, color: "from-purple-600 to-blue-600", emoji: "🐍", image: "https://cdn.poehali.dev/projects/30d348bc-9504-4030-a569-e04434a0fc03/files/215138b0-a1f6-4cfd-b3b4-bad1943c7de5.jpg", saved: true },
+  { id: 2, title: "Дизайн интерфейсов", author: "Мария Козлова", category: "Дизайн", duration: "18 ч", lessons: 32, rating: 4.8, students: 8200, progress: 30, color: "from-pink-600 to-orange-500", emoji: "🎨", image: "https://cdn.poehali.dev/projects/30d348bc-9504-4030-a569-e04434a0fc03/files/130087a4-e65c-4d98-bd95-56f514fcd970.jpg", saved: false },
+  { id: 3, title: "Английский язык B2", author: "Джон Уотсон", category: "Языки", duration: "40 ч", lessons: 80, rating: 4.7, students: 21000, progress: 12, color: "from-cyan-500 to-teal-600", emoji: "🌍", image: "https://cdn.poehali.dev/projects/30d348bc-9504-4030-a569-e04434a0fc03/files/33c14bac-9540-4121-8091-9a05be97ed91.jpg", saved: true },
+  { id: 4, title: "Маркетинг в соцсетях", author: "Ольга Петрова", category: "Маркетинг", duration: "12 ч", lessons: 24, rating: 4.6, students: 5800, progress: 0, color: "from-yellow-500 to-orange-600", emoji: "📱", image: "https://cdn.poehali.dev/projects/30d348bc-9504-4030-a569-e04434a0fc03/files/130087a4-e65c-4d98-bd95-56f514fcd970.jpg", saved: false },
 ];
 
 const VIDEOS = [
@@ -74,14 +38,144 @@ const VIDEOS = [
 ];
 
 const CATEGORIES = ["Все", "Программирование", "Дизайн", "Языки", "Маркетинг", "Математика"];
-
 const ACHIEVEMENTS = [
   { emoji: "🔥", title: "7 дней подряд", desc: "Серия обучения" },
   { emoji: "⭐", title: "Отличник", desc: "5 тестов на 100%" },
   { emoji: "🚀", title: "Быстрый старт", desc: "3 курса начато" },
 ];
 
-// ===== COMPONENTS =====
+// ===== AUTH SCREENS =====
+function AuthScreen() {
+  const [mode, setMode] = useState<"login" | "register">("login");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPass, setShowPass] = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const { signIn, signUp } = useAuth();
+
+  const submit = async () => {
+    setError("");
+    setLoading(true);
+    let err: string | null = null;
+    if (mode === "login") {
+      err = await signIn(email, password);
+    } else {
+      err = await signUp(name, email, password);
+    }
+    setLoading(false);
+    if (err) setError(err);
+  };
+
+  return (
+    <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="relative w-full max-w-sm flex flex-col" style={{ height: "100dvh", maxHeight: "900px" }}>
+        {/* BG blobs */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-72 h-72 rounded-full bg-purple-600/20 blur-3xl pointer-events-none" />
+        <div className="absolute bottom-20 right-0 w-48 h-48 rounded-full bg-cyan-500/15 blur-3xl pointer-events-none" />
+
+        <div className="flex-1 flex flex-col justify-center px-6 relative">
+          {/* Logo */}
+          <div className="text-center mb-10 animate-fade-in" style={{ opacity: 0 }}>
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-500 to-cyan-400 flex items-center justify-center mx-auto mb-4 animate-pulse-glow">
+              <Icon name="GraduationCap" size={28} className="text-white" />
+            </div>
+            <h1 className="font-display text-2xl font-bold text-white">LearnX</h1>
+            <p className="text-white/40 text-sm mt-1">Учись без границ</p>
+          </div>
+
+          {/* Toggle */}
+          <div className="glass rounded-2xl p-1 flex mb-8 animate-fade-in" style={{ animationDelay: "80ms", opacity: 0 }}>
+            <button
+              onClick={() => { setMode("login"); setError(""); }}
+              className={`flex-1 py-2.5 rounded-xl text-sm font-semibold font-display transition-all ${mode === "login" ? "bg-gradient-to-r from-purple-600 to-blue-600 text-white" : "text-white/40"}`}
+            >
+              Вход
+            </button>
+            <button
+              onClick={() => { setMode("register"); setError(""); }}
+              className={`flex-1 py-2.5 rounded-xl text-sm font-semibold font-display transition-all ${mode === "register" ? "bg-gradient-to-r from-purple-600 to-blue-600 text-white" : "text-white/40"}`}
+            >
+              Регистрация
+            </button>
+          </div>
+
+          {/* Form */}
+          <div className="space-y-4 animate-fade-in" style={{ animationDelay: "160ms", opacity: 0 }}>
+            {mode === "register" && (
+              <div className="relative">
+                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30">
+                  <Icon name="User" size={16} />
+                </div>
+                <input
+                  type="text"
+                  placeholder="Ваше имя"
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  className="search-input w-full glass rounded-2xl py-4 pl-11 pr-4 text-sm text-white bg-transparent"
+                />
+              </div>
+            )}
+            <div className="relative">
+              <div className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30">
+                <Icon name="Mail" size={16} />
+              </div>
+              <input
+                type="email"
+                placeholder="Email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                className="search-input w-full glass rounded-2xl py-4 pl-11 pr-4 text-sm text-white bg-transparent"
+              />
+            </div>
+            <div className="relative">
+              <div className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30">
+                <Icon name="Lock" size={16} />
+              </div>
+              <input
+                type={showPass ? "text" : "password"}
+                placeholder="Пароль"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && submit()}
+                className="search-input w-full glass rounded-2xl py-4 pl-11 pr-12 text-sm text-white bg-transparent"
+              />
+              <button onClick={() => setShowPass(!showPass)} className="absolute right-4 top-1/2 -translate-y-1/2 text-white/30">
+                <Icon name={showPass ? "EyeOff" : "Eye"} size={16} />
+              </button>
+            </div>
+
+            {error && (
+              <div className="flex items-center gap-2 text-red-400 text-sm glass rounded-xl px-4 py-3">
+                <Icon name="AlertCircle" size={14} />
+                <span>{error}</span>
+              </div>
+            )}
+
+            <button
+              onClick={submit}
+              disabled={loading}
+              className="w-full py-4 rounded-2xl font-display font-bold text-sm text-white bg-gradient-to-r from-purple-600 to-blue-600 transition-all active:scale-95 disabled:opacity-60 mt-2"
+              style={{ boxShadow: "0 8px 30px rgba(168,85,247,0.4)" }}
+            >
+              {loading ? (
+                <span className="flex items-center justify-center gap-2">
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  {mode === "login" ? "Входим..." : "Регистрируем..."}
+                </span>
+              ) : (
+                mode === "login" ? "Войти" : "Создать аккаунт"
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ===== SHARED COMPONENTS =====
 function SearchBar({ query, onChange }: { query: string; onChange: (v: string) => void }) {
   return (
     <div className="relative">
@@ -92,11 +186,11 @@ function SearchBar({ query, onChange }: { query: string; onChange: (v: string) =
         type="text"
         placeholder="Поиск курсов и материалов..."
         value={query}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={e => onChange(e.target.value)}
         className="search-input w-full glass rounded-2xl py-3.5 pl-11 pr-4 text-sm text-white bg-transparent"
       />
       {query && (
-        <button onClick={() => onChange("")} className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 hover:text-white">
+        <button onClick={() => onChange("")} className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40">
           <Icon name="X" size={16} />
         </button>
       )}
@@ -114,7 +208,7 @@ function CourseCard({ course, delay = 0 }: { course: typeof COURSES[0]; delay?: 
         <div className="absolute inset-0 flex items-center justify-center">
           <span className="text-4xl">{course.emoji}</span>
         </div>
-        <button onClick={(e) => { e.stopPropagation(); setSaved(!saved); }} className="absolute top-3 right-3 w-8 h-8 glass rounded-full flex items-center justify-center">
+        <button onClick={e => { e.stopPropagation(); setSaved(!saved); }} className="absolute top-3 right-3 w-8 h-8 glass rounded-full flex items-center justify-center">
           <Icon name={saved ? "Bookmark" : "BookmarkPlus"} size={14} className={saved ? "text-yellow-400" : "text-white/70"} />
         </button>
         <span className="absolute top-3 left-3 text-xs font-medium px-2.5 py-1 rounded-full glass text-white/90">{course.category}</span>
@@ -138,9 +232,7 @@ function CourseCard({ course, delay = 0 }: { course: typeof COURSES[0]; delay?: 
             </div>
           </div>
         ) : (
-          <button className="w-full py-2 rounded-xl text-xs font-semibold font-display bg-gradient-to-r from-purple-600 to-blue-600 text-white">
-            Начать курс
-          </button>
+          <button className="w-full py-2 rounded-xl text-xs font-semibold font-display bg-gradient-to-r from-purple-600 to-blue-600 text-white">Начать курс</button>
         )}
       </div>
     </div>
@@ -154,7 +246,7 @@ function VideoCard({ video, delay = 0 }: { video: typeof VIDEOS[0]; delay?: numb
       <div className="relative w-24 h-16 rounded-xl overflow-hidden flex-shrink-0">
         <img src={video.thumb} alt={video.title} className="w-full h-full object-cover" />
         <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-          <div className="w-8 h-8 rounded-full bg-white/20 backdrop-blur flex items-center justify-center video-play-btn">
+          <div className="w-8 h-8 rounded-full bg-white/20 backdrop-blur flex items-center justify-center">
             <Icon name="Play" size={12} className="text-white ml-0.5" />
           </div>
         </div>
@@ -168,7 +260,7 @@ function VideoCard({ video, delay = 0 }: { video: typeof VIDEOS[0]; delay?: numb
           <span>{(video.views / 1000).toFixed(1)}k просмотров</span>
         </div>
       </div>
-      <button onClick={(e) => { e.stopPropagation(); setSaved(!saved); }} className="self-start mt-1 flex-shrink-0">
+      <button onClick={e => { e.stopPropagation(); setSaved(!saved); }} className="self-start mt-1 flex-shrink-0">
         <Icon name={saved ? "Bookmark" : "BookmarkPlus"} size={16} className={saved ? "text-yellow-400" : "text-white/30"} />
       </button>
     </div>
@@ -177,8 +269,9 @@ function VideoCard({ video, delay = 0 }: { video: typeof VIDEOS[0]; delay?: numb
 
 // ===== SCREENS =====
 function HomeScreen({ onSearch }: { onSearch: () => void }) {
-  const [query, setQuery] = useState("");
+  const { user } = useAuth();
   const inProgress = COURSES.filter(c => c.progress > 0);
+  const firstName = user?.name?.split(" ")[0] || "Привет";
 
   return (
     <div className="animate-tab-switch">
@@ -189,22 +282,22 @@ function HomeScreen({ onSearch }: { onSearch: () => void }) {
           <div className="flex items-center justify-between mb-4">
             <div>
               <p className="text-white/50 text-sm mb-0.5">Добро пожаловать 👋</p>
-              <h1 className="font-display text-xl font-bold text-white">Привет, Алина!</h1>
+              <h1 className="font-display text-xl font-bold text-white">Привет, {firstName}!</h1>
             </div>
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-cyan-400 flex items-center justify-center text-sm font-bold font-display text-white animate-pulse-glow">А</div>
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-cyan-400 flex items-center justify-center text-sm font-bold font-display text-white animate-pulse-glow">
+              {user?.avatar_letter || "?"}
+            </div>
           </div>
-          <div onClick={onSearch}>
-            <SearchBar query={query} onChange={setQuery} />
-          </div>
+          <div onClick={onSearch}><SearchBar query="" onChange={() => {}} /></div>
         </div>
       </div>
 
       <div className="px-5 mb-6">
         <div className="grid grid-cols-3 gap-3">
           {[
-            { label: "Курсов", value: "4", color: "text-purple-400" },
-            { label: "Часов", value: "12.4", color: "text-cyan-400" },
-            { label: "Серия", value: "7🔥", color: "text-orange-400" },
+            { label: "Курсов", value: String(user?.courses_started ?? 4), color: "text-purple-400" },
+            { label: "Часов", value: String(user?.hours_studied ?? "12.4"), color: "text-cyan-400" },
+            { label: "Серия", value: `${user?.streak_days ?? 7}🔥`, color: "text-orange-400" },
           ].map((s, i) => (
             <div key={i} className="glass rounded-2xl p-3 text-center animate-fade-in" style={{ animationDelay: `${i * 80}ms`, opacity: 0 }}>
               <p className={`text-xl font-display font-bold ${s.color}`}>{s.value}</p>
@@ -220,11 +313,9 @@ function HomeScreen({ onSearch }: { onSearch: () => void }) {
             <h2 className="font-display text-base font-bold text-white">Продолжить обучение</h2>
             <button className="text-xs text-purple-400">Все</button>
           </div>
-          <div className="px-5 flex gap-3 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+          <div className="px-5 flex gap-3 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
             {inProgress.map((c, i) => (
-              <div key={c.id} className="min-w-[200px]">
-                <CourseCard course={c} delay={i * 100} />
-              </div>
+              <div key={c.id} className="min-w-[200px]"><CourseCard course={c} delay={i * 100} /></div>
             ))}
           </div>
         </section>
@@ -242,7 +333,7 @@ function HomeScreen({ onSearch }: { onSearch: () => void }) {
 
       <section className="px-5 mb-8">
         <h2 className="font-display text-base font-bold text-white mb-3">Достижения</h2>
-        <div className="flex gap-3 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+        <div className="flex gap-3 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
           {ACHIEVEMENTS.map((a, i) => (
             <div key={i} className="glass rounded-2xl p-4 flex-shrink-0 w-28 text-center animate-fade-in" style={{ animationDelay: `${i * 100}ms`, opacity: 0 }}>
               <div className="text-2xl mb-1.5">{a.emoji}</div>
@@ -264,14 +355,13 @@ function CatalogScreen() {
     const matchQ = c.title.toLowerCase().includes(query.toLowerCase()) || c.author.toLowerCase().includes(query.toLowerCase());
     return matchCat && matchQ;
   });
-
   return (
     <div className="animate-tab-switch">
       <div className="px-5 pt-6 mb-4">
         <h1 className="font-display text-xl font-bold text-white mb-4">Каталог курсов</h1>
         <SearchBar query={query} onChange={setQuery} />
       </div>
-      <div className="px-5 mb-4 flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+      <div className="px-5 mb-4 flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
         {CATEGORIES.map(cat => (
           <button key={cat} onClick={() => setActiveCategory(cat)}
             className={`flex-shrink-0 px-4 py-2 rounded-full text-xs font-semibold font-display transition-all ${activeCategory === cat ? "bg-gradient-to-r from-purple-600 to-blue-600 text-white" : "glass text-white/60"}`}>
@@ -297,10 +387,7 @@ function CatalogScreen() {
 
 function VideosScreen() {
   const [query, setQuery] = useState("");
-  const filtered = VIDEOS.filter(v =>
-    v.title.toLowerCase().includes(query.toLowerCase()) || v.course.toLowerCase().includes(query.toLowerCase())
-  );
-
+  const filtered = VIDEOS.filter(v => v.title.toLowerCase().includes(query.toLowerCase()) || v.course.toLowerCase().includes(query.toLowerCase()));
   return (
     <div className="animate-tab-switch">
       <div className="px-5 pt-6 mb-4">
@@ -312,7 +399,7 @@ function VideosScreen() {
           <img src="https://cdn.poehali.dev/projects/30d348bc-9504-4030-a569-e04434a0fc03/files/33c14bac-9540-4121-8091-9a05be97ed91.jpg" alt="featured" className="w-full h-full object-cover" />
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
           <div className="absolute inset-0 flex items-center justify-center">
-            <div className="w-14 h-14 rounded-full glass-strong flex items-center justify-center video-play-btn animate-pulse-glow">
+            <div className="w-14 h-14 rounded-full glass-strong flex items-center justify-center animate-pulse-glow">
               <Icon name="Play" size={22} className="text-white ml-1" />
             </div>
           </div>
@@ -343,7 +430,6 @@ function VideosScreen() {
 function SavedScreen() {
   const savedCourses = COURSES.filter(c => c.saved);
   const savedVideos = VIDEOS.filter(v => v.saved);
-
   return (
     <div className="animate-tab-switch px-5 pt-6 pb-8">
       <h1 className="font-display text-xl font-bold text-white mb-6">Сохранённое</h1>
@@ -353,11 +439,10 @@ function SavedScreen() {
           <h2 className="font-display text-sm font-bold text-white">Курсы</h2>
           <span className="ml-auto text-xs text-white/35">{savedCourses.length}</span>
         </div>
-        {savedCourses.length > 0 ? (
-          <div className="grid grid-cols-1 gap-4">{savedCourses.map((c, i) => <CourseCard key={c.id} course={c} delay={i * 80} />)}</div>
-        ) : (
-          <div className="glass rounded-2xl p-8 text-center text-white/30"><div className="text-3xl mb-2">📚</div><p className="text-sm">Нет сохранённых курсов</p></div>
-        )}
+        {savedCourses.length > 0
+          ? <div className="grid grid-cols-1 gap-4">{savedCourses.map((c, i) => <CourseCard key={c.id} course={c} delay={i * 80} />)}</div>
+          : <div className="glass rounded-2xl p-8 text-center text-white/30"><div className="text-3xl mb-2">📚</div><p className="text-sm">Нет сохранённых курсов</p></div>
+        }
       </section>
       <section>
         <div className="flex items-center gap-2 mb-3">
@@ -365,26 +450,26 @@ function SavedScreen() {
           <h2 className="font-display text-sm font-bold text-white">Видео</h2>
           <span className="ml-auto text-xs text-white/35">{savedVideos.length}</span>
         </div>
-        {savedVideos.length > 0 ? (
-          <div className="space-y-3">{savedVideos.map((v, i) => <VideoCard key={v.id} video={v} delay={i * 80} />)}</div>
-        ) : (
-          <div className="glass rounded-2xl p-8 text-center text-white/30"><div className="text-3xl mb-2">🎬</div><p className="text-sm">Нет сохранённых видео</p></div>
-        )}
+        {savedVideos.length > 0
+          ? <div className="space-y-3">{savedVideos.map((v, i) => <VideoCard key={v.id} video={v} delay={i * 80} />)}</div>
+          : <div className="glass rounded-2xl p-8 text-center text-white/30"><div className="text-3xl mb-2">🎬</div><p className="text-sm">Нет сохранённых видео</p></div>
+        }
       </section>
     </div>
   );
 }
 
 function ProgressScreen() {
+  const { user } = useAuth();
   return (
     <div className="animate-tab-switch px-5 pt-6 pb-8">
       <h1 className="font-display text-xl font-bold text-white mb-6">Мой прогресс</h1>
       <div className="grid grid-cols-2 gap-3 mb-6">
         {[
-          { label: "Курсов начато", value: "4", icon: "BookOpen", gradient: "from-purple-600 to-blue-600" },
-          { label: "Часов изучено", value: "12.4", icon: "Clock", gradient: "from-cyan-500 to-teal-500" },
-          { label: "Видео просмотрено", value: "38", icon: "Play", gradient: "from-pink-500 to-rose-600" },
-          { label: "Дней подряд", value: "7", icon: "Flame", gradient: "from-orange-500 to-yellow-500" },
+          { label: "Курсов начато", value: String(user?.courses_started ?? 4), icon: "BookOpen", gradient: "from-purple-600 to-blue-600" },
+          { label: "Часов изучено", value: String(user?.hours_studied ?? "12.4"), icon: "Clock", gradient: "from-cyan-500 to-teal-500" },
+          { label: "Видео просмотрено", value: String(user?.videos_watched ?? 38), icon: "Play", gradient: "from-pink-500 to-rose-600" },
+          { label: "Дней подряд", value: String(user?.streak_days ?? 7), icon: "Flame", gradient: "from-orange-500 to-yellow-500" },
         ].map((s, i) => (
           <div key={i} className="glass rounded-2xl p-4 animate-fade-in" style={{ animationDelay: `${i * 80}ms`, opacity: 0 }}>
             <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${s.gradient} flex items-center justify-center mb-2`}>
@@ -395,8 +480,7 @@ function ProgressScreen() {
           </div>
         ))}
       </div>
-
-      <div className="glass rounded-2xl p-4 mb-6 animate-fade-in" style={{ animationDelay: '200ms', opacity: 0 }}>
+      <div className="glass rounded-2xl p-4 mb-6 animate-fade-in" style={{ animationDelay: "200ms", opacity: 0 }}>
         <h2 className="font-display text-sm font-bold text-white mb-4">Активность за неделю</h2>
         <div className="flex items-end gap-2 h-20">
           {[40, 70, 55, 90, 65, 80, 100].map((h, i) => {
@@ -404,18 +488,17 @@ function ProgressScreen() {
             const isToday = i === 6;
             return (
               <div key={i} className="flex-1 flex flex-col items-center gap-1.5">
-                <div className="w-full relative" style={{ height: '60px' }}>
-                  <div className={`absolute bottom-0 w-full rounded-t-lg progress-bar ${isToday ? 'bg-gradient-to-t from-purple-600 to-cyan-400' : 'bg-white/15'}`}
+                <div className="w-full relative" style={{ height: "60px" }}>
+                  <div className={`absolute bottom-0 w-full rounded-t-lg progress-bar ${isToday ? "bg-gradient-to-t from-purple-600 to-cyan-400" : "bg-white/15"}`}
                     style={{ "--progress-width": "100%", height: `${h}%` } as React.CSSProperties} />
                 </div>
-                <span className={`text-[10px] font-semibold ${isToday ? 'text-purple-400' : 'text-white/30'}`}>{days[i]}</span>
+                <span className={`text-[10px] font-semibold ${isToday ? "text-purple-400" : "text-white/30"}`}>{days[i]}</span>
               </div>
             );
           })}
         </div>
       </div>
-
-      <div className="glass rounded-2xl p-4 animate-fade-in" style={{ animationDelay: '300ms', opacity: 0 }}>
+      <div className="glass rounded-2xl p-4 animate-fade-in" style={{ animationDelay: "300ms", opacity: 0 }}>
         <h2 className="font-display text-sm font-bold text-white mb-4">Прогресс по курсам</h2>
         <div className="space-y-4">
           {COURSES.map((c, i) => (
@@ -426,12 +509,11 @@ function ProgressScreen() {
                   <p className="text-sm font-semibold text-white truncate">{c.title}</p>
                   <p className="text-xs text-white/40">{c.lessons} уроков · {c.duration}</p>
                 </div>
-                <span className={`text-sm font-bold font-display ${c.progress > 0 ? 'text-purple-400' : 'text-white/25'}`}>{c.progress}%</span>
+                <span className={`text-sm font-bold font-display ${c.progress > 0 ? "text-purple-400" : "text-white/25"}`}>{c.progress}%</span>
               </div>
               <div className="h-2 bg-white/10 rounded-full overflow-hidden">
                 {c.progress > 0 && (
-                  <div className="h-full bg-gradient-to-r from-purple-500 to-cyan-400 rounded-full progress-bar"
-                    style={{ "--progress-width": `${c.progress}%` } as React.CSSProperties} />
+                  <div className="h-full bg-gradient-to-r from-purple-500 to-cyan-400 rounded-full progress-bar" style={{ "--progress-width": `${c.progress}%` } as React.CSSProperties} />
                 )}
               </div>
             </div>
@@ -443,21 +525,23 @@ function ProgressScreen() {
 }
 
 function ProfileScreen() {
+  const { user, signOut } = useAuth();
   return (
     <div className="animate-tab-switch pb-8">
       <div className="relative px-5 pt-8 pb-10 overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-b from-purple-900/50 to-transparent" />
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-64 h-64 rounded-full bg-purple-600/20 blur-3xl" />
         <div className="relative flex flex-col items-center text-center">
-          <div className="w-20 h-20 rounded-full bg-gradient-to-br from-purple-500 via-pink-500 to-cyan-400 flex items-center justify-center text-3xl font-display font-bold text-white mb-3 animate-pulse-glow animate-float">А</div>
-          <h1 className="font-display text-lg font-bold text-white">Алина Новикова</h1>
-          <p className="text-white/50 text-sm mt-0.5">alina.novikova@mail.ru</p>
-          <div className="flex items-center gap-1.5 mt-2">
-            <span className="text-xs text-cyan-400 font-semibold font-display">🎓 Продвинутый</span>
+          <div className="w-20 h-20 rounded-full bg-gradient-to-br from-purple-500 via-pink-500 to-cyan-400 flex items-center justify-center text-3xl font-display font-bold text-white mb-3 animate-pulse-glow animate-float">
+            {user?.avatar_letter || "?"}
+          </div>
+          <h1 className="font-display text-lg font-bold text-white">{user?.name || "—"}</h1>
+          <p className="text-white/50 text-sm mt-0.5">{user?.email || "—"}</p>
+          <div className="mt-2">
+            <span className="text-xs text-cyan-400 font-semibold font-display">🎓 {user?.level || "Начинающий"}</span>
           </div>
         </div>
       </div>
-
       <div className="px-5 -mt-4 mb-6">
         <div className="glass rounded-2xl p-4">
           <h2 className="font-display text-sm font-bold text-white mb-3">Мои достижения</h2>
@@ -471,17 +555,16 @@ function ProfileScreen() {
           </div>
         </div>
       </div>
-
       <div className="px-5 space-y-2">
         {[
-          { icon: "User", label: "Редактировать профиль", color: "text-purple-400" },
-          { icon: "Bell", label: "Уведомления", color: "text-cyan-400" },
-          { icon: "Shield", label: "Безопасность", color: "text-green-400" },
-          { icon: "CreditCard", label: "Подписка и оплата", color: "text-yellow-400" },
-          { icon: "HelpCircle", label: "Помощь и поддержка", color: "text-blue-400" },
-          { icon: "LogOut", label: "Выйти из аккаунта", color: "text-red-400" },
+          { icon: "User", label: "Редактировать профиль", color: "text-purple-400", action: null },
+          { icon: "Bell", label: "Уведомления", color: "text-cyan-400", action: null },
+          { icon: "Shield", label: "Безопасность", color: "text-green-400", action: null },
+          { icon: "CreditCard", label: "Подписка и оплата", color: "text-yellow-400", action: null },
+          { icon: "HelpCircle", label: "Помощь и поддержка", color: "text-blue-400", action: null },
+          { icon: "LogOut", label: "Выйти из аккаунта", color: "text-red-400", action: signOut },
         ].map((item, i) => (
-          <button key={i} className="w-full glass rounded-2xl px-4 py-3.5 flex items-center gap-3 animate-fade-in" style={{ animationDelay: `${i * 60}ms`, opacity: 0 }}>
+          <button key={i} onClick={() => item.action?.()} className="w-full glass rounded-2xl px-4 py-3.5 flex items-center gap-3 animate-fade-in" style={{ animationDelay: `${i * 60}ms`, opacity: 0 }}>
             <Icon name={item.icon} size={18} className={item.color} />
             <span className="text-sm font-medium text-white flex-1 text-left">{item.label}</span>
             <Icon name="ChevronRight" size={16} className="text-white/20" />
@@ -495,25 +578,16 @@ function ProfileScreen() {
 // ===== SEARCH OVERLAY =====
 function SearchOverlay({ onClose }: { onClose: () => void }) {
   const [query, setQuery] = useState("");
-  const filteredCourses = COURSES.filter(c =>
-    query && (c.title.toLowerCase().includes(query.toLowerCase()) || c.category.toLowerCase().includes(query.toLowerCase()))
-  );
-  const filteredVideos = VIDEOS.filter(v =>
-    query && (v.title.toLowerCase().includes(query.toLowerCase()) || v.course.toLowerCase().includes(query.toLowerCase()))
-  );
-
+  const filteredCourses = COURSES.filter(c => query && (c.title.toLowerCase().includes(query.toLowerCase()) || c.category.toLowerCase().includes(query.toLowerCase())));
+  const filteredVideos = VIDEOS.filter(v => query && (v.title.toLowerCase().includes(query.toLowerCase()) || v.course.toLowerCase().includes(query.toLowerCase())));
   return (
-    <div className="absolute inset-0 z-50 bg-background animate-fade-in overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
+    <div className="absolute inset-0 z-50 bg-background animate-fade-in overflow-y-auto" style={{ scrollbarWidth: "none" }}>
       <div className="px-5 pt-6 pb-4 flex items-center gap-3">
-        <button onClick={onClose} className="text-white/60">
-          <Icon name="ArrowLeft" size={22} />
-        </button>
-        <div className="flex-1">
-          <SearchBar query={query} onChange={setQuery} />
-        </div>
+        <button onClick={onClose} className="text-white/60"><Icon name="ArrowLeft" size={22} /></button>
+        <div className="flex-1"><SearchBar query={query} onChange={setQuery} /></div>
       </div>
       {!query && (
-        <div className="px-5 py-8 text-center text-white/30 animate-fade-in">
+        <div className="px-5 py-8 text-center text-white/30">
           <div className="text-5xl mb-3">🔍</div>
           <p className="font-display text-sm">Начните вводить название курса или видео</p>
         </div>
@@ -533,7 +607,7 @@ function SearchOverlay({ onClose }: { onClose: () => void }) {
             </section>
           )}
           {filteredCourses.length === 0 && filteredVideos.length === 0 && (
-            <div className="text-center py-16 text-white/30 animate-fade-in">
+            <div className="text-center py-16 text-white/30">
               <div className="text-5xl mb-3">😔</div>
               <p className="font-display text-sm">Ничего не найдено по запросу «{query}»</p>
             </div>
@@ -544,7 +618,7 @@ function SearchOverlay({ onClose }: { onClose: () => void }) {
   );
 }
 
-// ===== BOTTOM NAV =====
+// ===== NAV =====
 const NAV_ITEMS = [
   { id: "home", icon: "Home", label: "Главная" },
   { id: "catalog", icon: "Grid3x3", label: "Каталог" },
@@ -555,14 +629,9 @@ const NAV_ITEMS = [
 ];
 
 // ===== MAIN APP =====
-export default function Index() {
+function App() {
   const [activeTab, setActiveTab] = useState("home");
   const [showSearch, setShowSearch] = useState(false);
-
-  useEffect(() => {
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = ''; };
-  }, []);
 
   const renderScreen = () => {
     switch (activeTab) {
@@ -578,38 +647,93 @@ export default function Index() {
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center">
-      <div className="relative w-full max-w-sm bg-background overflow-hidden flex flex-col" style={{ height: '100dvh', maxHeight: '900px' }}>
-        {/* Background blobs */}
+      <div className="relative w-full max-w-sm bg-background overflow-hidden flex flex-col" style={{ height: "100dvh", maxHeight: "900px" }}>
         <div className="fixed top-20 right-5 w-32 h-32 rounded-full bg-purple-600/10 blur-3xl pointer-events-none" />
         <div className="fixed bottom-32 left-5 w-28 h-28 rounded-full bg-cyan-500/10 blur-3xl pointer-events-none" />
-
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'none', paddingBottom: '80px' }}>
+        <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: "none", paddingBottom: "80px" }}>
           {renderScreen()}
         </div>
-
-        {/* Bottom Navigation */}
         <div className="absolute bottom-0 left-0 right-0 glass-strong border-t border-white/5">
           <div className="flex items-center py-2 px-2">
-            {NAV_ITEMS.map((item) => {
+            {NAV_ITEMS.map(item => {
               const isActive = activeTab === item.id;
               return (
                 <button key={item.id} onClick={() => setActiveTab(item.id)}
-                  className={`flex-1 nav-item flex flex-col items-center py-1.5 gap-0.5 rounded-xl ${isActive ? 'active' : ''}`}>
-                  <div className={`relative transition-all duration-200 ${isActive ? 'scale-110' : ''}`}>
+                  className={`flex-1 nav-item flex flex-col items-center py-1.5 gap-0.5 rounded-xl ${isActive ? "active" : ""}`}>
+                  <div className={`relative transition-all duration-200 ${isActive ? "scale-110" : ""}`}>
                     {isActive && <div className="absolute inset-0 bg-purple-500/30 rounded-full blur-md scale-150" />}
-                    <Icon name={item.icon} size={isActive ? 22 : 20} className={`relative transition-colors ${isActive ? 'text-purple-400' : 'text-white/30'}`} />
+                    <Icon name={item.icon} size={isActive ? 22 : 20} className={`relative transition-colors ${isActive ? "text-purple-400" : "text-white/30"}`} />
                   </div>
-                  <span className={`text-[9px] font-semibold font-display transition-colors ${isActive ? 'text-purple-400' : 'text-white/25'}`}>{item.label}</span>
+                  <span className={`text-[9px] font-semibold font-display transition-colors ${isActive ? "text-purple-400" : "text-white/25"}`}>{item.label}</span>
                 </button>
               );
             })}
           </div>
         </div>
-
-        {/* Search overlay */}
         {showSearch && <SearchOverlay onClose={() => setShowSearch(false)} />}
       </div>
     </div>
+  );
+}
+
+// ===== ROOT WITH AUTH =====
+export default function Index() {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    document.body.style.overflow = "hidden";
+    const token = getToken();
+    if (token) {
+      getProfile(token).then(res => {
+        if ("user" in res) setUser(res.user);
+        else clearToken();
+        setLoading(false);
+      });
+    } else {
+      setLoading(false);
+    }
+    return () => { document.body.style.overflow = ""; };
+  }, []);
+
+  const signIn = async (email: string, password: string): Promise<string | null> => {
+    const res = await login(email, password);
+    if ("error" in res) return res.error;
+    saveToken(res.token);
+    setUser(res.user);
+    return null;
+  };
+
+  const signUp = async (name: string, email: string, password: string): Promise<string | null> => {
+    const res = await register(name, email, password);
+    if ("error" in res) return res.error;
+    saveToken(res.token);
+    setUser(res.user);
+    return null;
+  };
+
+  const signOut = () => {
+    const token = getToken();
+    if (token) logout(token);
+    setUser(null);
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-500 to-cyan-400 flex items-center justify-center animate-pulse-glow">
+            <Icon name="GraduationCap" size={24} className="text-white" />
+          </div>
+          <div className="w-6 h-6 border-2 border-purple-500/30 border-t-purple-400 rounded-full animate-spin" />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <AuthContext.Provider value={{ user, loading, signIn, signUp, signOut }}>
+      {user ? <App /> : <AuthScreen />}
+    </AuthContext.Provider>
   );
 }
